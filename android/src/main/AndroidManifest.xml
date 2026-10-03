@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Visibilidad del package de ReciboPagos en Android 11+ (API 30+), tanto
+        para resolver el Intent de cobro como para leer su ContentProvider.
+        Se mergea al manifest de la app consumidora en build time.
+    -->
+    <queries>
+        <package android:name="com.recibopagos.pos" />
+    </queries>
+
+</manifest>

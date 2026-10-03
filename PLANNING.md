@@ -1,0 +1,212 @@
+# recibopagos_app2app — Plan de trabajo
+
+Plugin Flutter (solo Android) para cobrar con la app **ReciboPagos POS** en el
+mismo equipo vía Intent. Consumidores: **DTEx** y **ParkingCash**.
+
+Fuente: https://recibopagos.com/desarrolladores/app-to-app (extraído 2026-10-03).
+Base de código: `../tuu_app_to_app` (mismo patrón Intent + `startActivityForResult`).
+
+---
+
+## 1. Contrato ReciboPagos (resumen de la doc)
+
+**Lanzamiento**
+
+| Item     | Valor                                   |
+|----------|-----------------------------------------|
+| Action   | `com.recibopagos.pos.sibus-payment`     |
+| Package  | `com.recibopagos.pos`                   |
+| Patrón   | `startActivityForResult` / `onActivityResult` |
+
+**Extras de entrada**
+
+| Extra            | Tipo    | Oblig. | Nota |
+|------------------|---------|--------|------|
+| `monto`          | int     | sí     | Pesos enteros. Sin él o en 0 la app abre normal. |
+| `orden_id`       | String  | no     | Vuelve como `order_id`. |
+| `tipo`           | String  | no     | `credito` / `debito` (sugerido). |
+| `id_transaction` | String  | no     | Id de nuestro sistema. |
+| `channel`        | String  | no     | Identifica a la app que llama. |
+| `exempt`         | int     | no     | 1 = exenta de IVA; 0/ausente = afecta. |
+| `exit_wallet`    | boolean | no     | `true` salta la calculadora. |
+
+El cobro caduca a los **5 minutos**.
+
+**Respuesta**
+
+- `resultCode -1` (RESULT_OK): el flujo terminó con datos. **No implica pago.**
+- `resultCode -5`: cancelado, rechazado o **equipo no está en modo intent**.
+- Veredicto real: `status_paid` → solo `paid` es aprobado. Otros: `cancel`,
+  `timeout`, `rechazado`, `failed`.
+- Extras al aprobar: `order_id`, `status_paid`, `transaction_id`,
+  `authorization_code`, `card_last_digits`, `payment_method` (CREDITO/DEBITO),
+  `installments` (0 = contado), `gratuity`, `paid_amount` (int, incluye
+  propina), `terminal_serial`.
+- En aprobado ningún string es null; en cancelado no hay garantías.
+
+**Canal de respaldo (ContentProvider, solo lectura)**
+
+`content://com.recibopagos.pos.provider/prefs` (y `/prefs/<key>`). Expone
+`order_id`, `status_paid`, `estado`, `result_code`, `transaction_id`.
+
+**Requisito operativo:** el equipo debe estar en **modo intent** (se activa en
+el panel de ReciboPagos).
+
+---
+
+## 2. Preguntas abiertas para ReciboPagos
+
+Bloquean detalles, no el arranque (se implementa tolerante y se ajusta):
+
+1. Tipo exacto de `installments`, `gratuity`, `transaction_id`,
+   `terminal_serial` (¿int o String?). Solo `paid_amount` está documentado como int.
+2. Esquema del cursor del ContentProvider: ¿una fila key/value o una fila con
+   columnas? ¿Requiere permiso de lectura? ¿Refleja solo el último cobro?
+3. ¿Existe build de desarrollo/sandbox (otro package) y comercio de pruebas?
+4. ¿`-5` distingue de algún modo "no está en modo intent" de "cancelado"?
+5. ¿Anulación/devolución vía Intent? (No documentado → se asume solo por API o
+   no soportado; fuera del alcance v0.1).
+6. ¿La app RP imprime voucher? ¿Emite boleta propia? (DTEx emite su DTE; hay
+   que evitar doble documento.)
+7. Modelos de terminal soportados (¿Sunmi, Nexgo?).
+
+---
+
+## 3. Diseño del plugin
+
+Copia reducida de `tuu_app_to_app`. Sin JSON: los extras son primitivos.
+
+```
+recibopagos_app2app/
+  pubspec.yaml                       # name: recibopagos_app2app, solo android
+  lib/recibopagos_app2app.dart       # exports
+  lib/src/recibopagos_client.dart    # cliente, modos, mock, parseo del resultado
+  lib/src/models.dart                # request, response, lastCharge, paymentType
+  lib/src/recibopagos_exception.dart # sealed
+  android/src/main/AndroidManifest.xml        # <queries> package
+  android/src/main/kotlin/cl/mufin/recibopagos_app2app/RecibopagosApp2appPlugin.kt
+  test/recibopagos_client_test.dart
+  README.md                          # guía de integración
+  CHANGELOG.md
+```
+
+**API Dart**
+
+```dart
+final rp = RecibopagosClient(
+  mode: RecibopagosMode.production,
+  channel: 'DTEx',
+);
+
+if (!await rp.isInstalled()) return;
+
+try {
+  final r = await rp.charge(RecibopagosChargeRequest(
+    amount: 12500,
+    orderId: 'VENTA-12345',   // siempre se envía: es la llave de conciliación
+    paymentType: RecibopagosPaymentType.debit, // opcional
+    exempt: false,
+    skipKeypad: true,         // exit_wallet
+  ));
+  // r.authorizationCode, r.cardLastDigits, r.paidAmount, r.gratuity, ...
+} on RecibopagosCancelledException {   // -5 o status 'cancel'
+} on RecibopagosTimeoutException {     // status 'timeout'
+} on RecibopagosRejectedException {    // status 'rechazado'
+} on RecibopagosFailedException {      // status 'failed'
+} on RecibopagosNotInstalledException {
+} on RecibopagosException {            // catch-all (status desconocido, nativo)
+}
+
+// Conciliación tras un cierre inesperado:
+final last = await rp.lastCharge(); // lee el ContentProvider, null si no hay
+```
+
+`charge()` solo retorna si `status_paid == 'paid'` **y** `order_id` coincide con
+el enviado; si no coincide lanza `RecibopagosUnknownException` (protege contra
+leer un resultado ajeno).
+
+**Kotlin (MethodChannel `cl.mufin.recibopagos_app2app`)**
+
+- `isInstalled()` → `packageManager.getPackageInfo("com.recibopagos.pos")`.
+- `charge(args)` → `Intent(ACTION).setPackage(PKG)` + extras con el tipo exacto
+  (`monto` Int, `exempt` Int, `exit_wallet` Boolean). Retorna
+  `{resultCode, extras}` donde `extras` es el `Bundle` completo volcado a
+  `Map<String, Any?>` (preserva tipos; el parseo tolerante vive en Dart).
+- `lastCharge()` → `contentResolver.query(...)` volcado a lista de mapas.
+- Errores nativos `MFN-03..07` (sin activity, no instalada, en curso,
+  falla al lanzar, falla al leer el provider).
+- Manifest: `<queries>` con `<package android:name="com.recibopagos.pos"/>`
+  (basta para ver tanto la activity como el provider).
+
+**Parseo tolerante en Dart:** cada extra se lee como `Object?` y se convierte
+(`int.tryParse` / `toString`) con valor por defecto, según el aviso de la doc.
+
+**Modo mock:** comportamientos `approve`, `cancel`, `timeout`, `reject`,
+`fail`, `notInIntentMode` (-5), con delay configurable. Para desarrollar sin POS.
+
+---
+
+## 4. Fases
+
+### Fase 0 — Preparación (0,5 día)
+- [x] `git init`, repo público `github.com/morello-cl/recibopagos_app2app`
+      (mismo esquema que `nexgo_smartpos`, consumido por tag).
+- [ ] Enviar preguntas de la sección 2 a ReciboPagos.
+- [ ] Conseguir terminal con app RP y modo intent activo.
+
+### Fase 1 — Plugin (1–1,5 días)
+- [x] Scaffold a partir de `tuu_app_to_app`.
+- [x] Kotlin: `isInstalled`, `charge`, `lastCharge`.
+- [x] Dart: request/response, excepciones, cliente, mock.
+- [x] Tests unitarios (`MethodChannel` mockeado).
+- [x] `README.md`, `CHANGELOG.md`, tag `v0.1.0`.
+
+### Fase 2 — Validación en terminal real (0,5–1 día)
+Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 2):
+- [ ] Aprobado débito y crédito (monto bajo), con y sin `exit_wallet`.
+- [ ] Aprobado con propina y con cuotas.
+- [ ] Cancelado por el cajero; botón back.
+- [ ] Rechazado (tarjeta sin fondos / tarjeta de prueba).
+- [ ] Timeout (dejar caducar).
+- [ ] Equipo **sin** modo intent → `-5`.
+- [ ] Matar nuestra app durante el cobro → al reabrir, `lastCharge()` concilia.
+- [ ] Venta exenta (`exempt: 1`).
+- [ ] Ajustar el parseo con los tipos reales y publicar `v0.1.1` si cambia.
+
+### Fase 3 — Integración DTEx (1 día)
+- [ ] Dependencia por git + tag (o `path` mientras se desarrolla).
+- [ ] `RecibopagosPayService` análogo a `KushkiPayService` (sin credenciales:
+      solo `channel` y modo).
+- [ ] `step2_page.dart`: agregar RP al auto-routing actual
+      (Kushki / Haulmer) con detección por `isInstalled()`. Definir prioridad.
+- [ ] Usar `paid_amount` (incluye propina) y `exempt` coherente con el tipo de DTE.
+- [ ] Conciliación al volver a primer plano con venta pendiente → `lastCharge()`.
+- [ ] Página de pruebas en `lib/src/pages/dev/` (como `kushki_test_page`).
+
+### Fase 4 — Integración ParkingCash (sesión remota, 1 día)
+- [ ] Dependencia `git: {url: ..., ref: v0.1.x}` (patrón de `nexgo_smartpos`).
+- [ ] Entregar a la sesión remota: `README.md` + este plan.
+- [ ] Integrar en el flujo de pago de salida; misma conciliación por `order_id`.
+- [ ] Revisar convivencia con `virtualpos_app2app` (selección de adquirente).
+
+### Fase 5 — Piloto y cierre
+- [ ] Piloto en 1 equipo por app; revisar conciliación contra el panel RP.
+- [ ] Tag final y actualizar refs en ambas apps.
+
+**Estimación total:** ~4–5 días de desarrollo, sin contar las respuestas de
+ReciboPagos ni la disponibilidad del equipo.
+
+---
+
+## 5. Riesgos
+
+| Riesgo | Mitigación |
+|--------|------------|
+| `RESULT_OK` interpretado como pagado | El plugin solo retorna éxito con `status_paid == 'paid'`. |
+| `-5` ambiguo (cancelado vs. sin modo intent) | Mensaje al cajero que mencione ambas causas; validar en Fase 2. |
+| App matada por el SO durante el cobro → cobro sin venta registrada | `orden_id` siempre enviado + `lastCharge()` al reanudar. |
+| Tipos de extras no documentados | Volcado genérico del `Bundle` + parseo tolerante en Dart. |
+| Doble documento tributario (RP + DTEx) | Pregunta 6 antes de producción. |
+| Visibilidad de package/provider en Android 11+ | `<queries>` en el manifest del plugin (se mergea solo). |
+
+Fuera de alcance v0.1: anulaciones/devoluciones, iOS, webhooks/API.
