@@ -225,8 +225,12 @@ Para que el backoffice lo reporte sin cambios:
   pago se cuenta como efectivo/otro.
 - `servicio` = `'recibopagos'` (minúscula, definido por Marco). Nunca
   `'MercadoPago'` ni `'QR-RECOVER'`: esos valores marcan el pago como QR/Web.
-  Pendiente que parkingcash_web confirme que el backoffice no compara
-  `servicio` sensible a mayúsculas.
+  Confirmado: el backoffice no requiere cambios (solo `routes/qr-web.js`
+  compara `servicio`, contra `MercadoPago`/`QR-RECOVER`).
+- **`abono_al_comercio_id` queda NULL** en las filas de ReciboPagos. El proceso
+  que crea los abonos (fuera de parkingcash_web; ¿Tomahawk/services?) debe
+  **excluir `servicio = 'recibopagos'`**, o esos pagos entrarían como dinero
+  que MUFIN debe liquidar.
 - `placas_tot_monto` = estacionamiento **sin** propina
   (`paid_amount - gratuity`). No hay columna para la propina.
 - `secuencia` ← `transaction_id`, `autorizacion` ← `authorization_code`,
