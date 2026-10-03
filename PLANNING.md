@@ -189,9 +189,9 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
 - [ ] Página de pruebas en `lib/src/pages/dev/` (como `kushki_test_page`).
 
 **Backend (Tomahawk), informado por su sesión el 2026-10-03:**
-- `proveedores_pago`: fila `recibopagos` con **`liquida_mufin=0`**
-  (definido por Marco el 2026-10-03: ReciboPagos deposita directo al comercio).
-  No necesita `tarifas_comision`.
+- `proveedores_pago`: fila `recibopagos` / `ReciboPagos` / **`liquida_mufin=0`**
+  **aplicada en producción** el 2026-10-03 (Tomahawk v7.57.0, `860cb0e`).
+  ReciboPagos deposita directo al comercio; 0 filas en `tarifas_comision`.
 - `dte_payment.servicio` = **`recibopagos`** (definido por Marco: llaves en
   minúscula). Los valores históricos (`Haulmer`, `SUMUP`, `Kushki`, `RedPay`)
   no se tocan.
@@ -223,10 +223,10 @@ Para que el backoffice lo reporte sin cambios:
 - `tarjeta_tipo`: mapear `CREDITO` → `'Tarjeta de Crédito'` y `DEBITO` →
   `'Tarjeta de Débito'` (literales exactos). Si llega `CREDITO` tal cual, el
   pago se cuenta como efectivo/otro.
-- `servicio` = `'recibopagos'` (minúscula, definido por Marco). **Por
-  confirmar:** la decisión fue sobre `dte_payment.servicio` (MySQL). En esta
-  tabla todos los valores llevan mayúsculas (`Haulmer`, `MercadoPago`,
-  `VirtualPOS`, `Compraqui`). Nunca
+- `servicio` = `'recibopagos'`, en minúscula. Marco lo confirmó también para
+  esta tabla, aunque sea el único valor en minúscula: un solo identificador
+  por proveedor. **No convertir a mayúscula al escribir**; la presentación se
+  resuelve aparte. Nunca
   `'MercadoPago'` ni `'QR-RECOVER'`: esos valores marcan el pago como QR/Web.
   Confirmado: el backoffice no requiere cambios (solo `routes/qr-web.js`
   compara `servicio`, contra `MercadoPago`/`QR-RECOVER`).
