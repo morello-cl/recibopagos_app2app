@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg: #E8F6F1; --ink: #0D1F15; --muted: #3D5549; --firm: #157C58;
+    --brand: #26B888; --paper: #FFFFFF; --rule: #C9DED5;
+  }
+  body.dark {
+    --bg: #0F2A20; --ink: #E8F6F1; --muted: #9DBFB1; --firm: #7FE3BD;
+    --rule: #24493A;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    width: 1280px; height: 640px; overflow: hidden;
+    background: var(--bg); color: var(--ink);
+    font-family: "Plus Jakarta Sans", sans-serif;
+    position: relative;
+  }
+  .copy { position: absolute; left: 72px; top: 84px; width: 450px; }
+  .logo { height: 34px; display: block; margin-bottom: 56px; }
+  h1 {
+    font-size: 54px; line-height: 1.05; font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+  .lede {
+    margin-top: 26px; font-size: 19px; line-height: 1.5; font-weight: 500;
+    color: var(--muted); max-width: 420px;
+  }
+
+  .pos { position: absolute; left: 846px; top: 96px; height: 600px; }
+
+  /* El recibo: imprime la ida y vuelta del Intent. */
+  .receipt {
+    position: absolute; left: 548px; top: 62px; width: 300px;
+    background: var(--paper); color: #0D1F15;
+    font: 400 14.5px/1.75 "JetBrains Mono", monospace;
+    padding: 24px 24px 34px;
+    filter: drop-shadow(0 22px 34px rgba(13, 31, 21, .22));
+    -webkit-mask:
+      conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg)
+      50% / 16px 100%;
+  }
+  body.dark .receipt { filter: drop-shadow(0 22px 34px rgba(0, 0, 0, .45)); }
+  .r-head {
+    display: flex; align-items: center; gap: 10px;
+    font: 700 15px "Plus Jakarta Sans", sans-serif; margin-bottom: 14px;
+  }
+  .r-head img { height: 22px; }
+  .r-sec { font: 700 12.5px "Plus Jakarta Sans", sans-serif; color: #5F786C; margin-top: 4px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; }
+  .row b { font-weight: 600; }
+  .tear { border-top: 2px dashed #C9DED5; margin: 14px -4px 12px; }
+  .paid { color: #157C58; }
+  .r-foot {
+    margin-top: 16px; padding-top: 12px; border-top: 1px solid #E3ECE8;
+    font: 700 14px "Plus Jakarta Sans", sans-serif; color: #157C58;
+  }
+</style>
+</head>
+<body class="__THEME__">
+  <div class="copy">
+    <img class="logo" src="__LOGO__" alt="">
+    <h1>Cobra con ReciboPagos desde tu app Flutter.</h1>
+    <p class="lede">Tu app abre la de ReciboPagos en el mismo equipo, el cliente paga con tarjeta y el resultado vuelve tipado.</p>
+  </div>
+
+  <img class="pos" src="pos.png" alt="">
+
+  <div class="receipt">
+    <div class="r-head"><img src="favicon-r.svg" alt="">Intent de cobro</div>
+    <div class="r-sec">Enviado</div>
+    <div class="row"><span>monto</span><b>20000</b></div>
+    <div class="row"><span>orden_id</span><b>VENTA-12345</b></div>
+    <div class="row"><span>exit_wallet</span><b>true</b></div>
+    <div class="tear"></div>
+    <div class="r-sec">Recibido</div>
+    <div class="row"><span>resultCode</span><b>-1</b></div>
+    <div class="row"><span>status_paid</span><b class="paid">paid</b></div>
+    <div class="row"><span>order_id</span><b>VENTA-12345</b></div>
+    <div class="row"><span>paid_amount</span><b>20000</b></div>
+    <div class="row"><span>card_last_digits</span><b>6789</b></div>
+    <div class="r-foot">Solo paid es un pago aprobado.</div>
+  </div>
+</body>
+</html>

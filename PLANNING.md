@@ -171,6 +171,8 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
 - [ ] Equipo **sin** modo intent → `-5`.
 - [ ] Matar nuestra app durante el cobro → al reabrir, `lastCharge()` concilia.
 - [ ] Venta exenta (`exempt: 1`).
+- [ ] Anotar el largo real de `transaction_id`. Si pasa de 24 caracteres,
+      trunca en `dte_payment.secuencia` (y quizá en `pago_con_tarjeta.secuencia`).
 - [ ] Ajustar el parseo con los tipos reales y publicar `v0.1.1` si cambia.
 
 ### Fase 3 — Integración DTEx (1 día)
@@ -183,11 +185,52 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
 - [ ] Conciliación al volver a primer plano con venta pendiente → `lastCharge()`.
 - [ ] Página de pruebas en `lib/src/pages/dev/` (como `kushki_test_page`).
 
+**Backend (Tomahawk), informado por su sesión el 2026-10-03:**
+- `proveedores_pago` (hoy `kushki` liquida_mufin=1, `tuu` liquida_mufin=0):
+  **Marco debe definir `liquida_mufin`** para ReciboPagos antes de agregar la
+  fila `recibopagos`. Un valor equivocado hace que los jobs de pago y ajuste la
+  tomen o la ignoren en silencio. Si no liquida por MUFIN, no necesita
+  `tarifas_comision`.
+- `dte_payment.servicio` es varchar(24) libre, con mayúsculas mezcladas
+  (`Haulmer`, `SUMUP`, `Kushki`, `RedPay`). El valor a escribir para
+  ReciboPagos lo define Marco.
+- `payment_method` `CREDITO`/`DEBITO` ya se normaliza bien en
+  `tarifa-resolver.js`; no hay que tocar nada.
+- **No enviar `transaction_id` por `card_sequence`:** `dte_payment.secuencia`
+  es varchar(24) y trunca en silencio (bug v7.55.0 con Kushki). Si el
+  `transaction_id` de RP supera 24 caracteres, usar `POST /api/dtes/v6`
+  (`transaction_reference` char(36), `ticket_adquirente` varchar(24)).
+- `paid_amount` incluye la propina: no usarlo como base de comisión.
+- Alta de equipos: `controllers/customers.js` fija el prefijo `NEWPOS:8210:` en
+  `serial_tid` y dos triggers recalculan `sn`. Un terminal RP dado de alta por
+  ahí queda con la marca equivocada (ya pasa con 1.862 equipos).
+- No usar `payment_processor_accounts` (modelo Compraquí): App To App no tiene
+  alianza ni webhook.
+- **Cuotas:** el cálculo de comisión no modela `installments > 1`. Si RP
+  permite cuotas y liquida por MUFIN, resolverlo antes.
+
 ### Fase 4 — Integración ParkingCash (sesión remota, 1 día)
 - [ ] Dependencia `git: {url: ..., ref: v0.1.x}` (patrón de `nexgo_smartpos`).
 - [ ] Entregar a la sesión remota: `README.md` + este plan.
 - [ ] Integrar en el flujo de pago de salida; misma conciliación por `order_id`.
 - [ ] Revisar convivencia con `virtualpos_app2app` (selección de adquirente).
+
+**Registro en `pago_con_tarjeta`, informado por parkingcash_web el 2026-10-03.**
+Para que el backoffice lo reporte sin cambios:
+- `tarjeta_tipo`: mapear `CREDITO` → `'Tarjeta de Crédito'` y `DEBITO` →
+  `'Tarjeta de Débito'` (literales exactos). Si llega `CREDITO` tal cual, el
+  pago se cuenta como efectivo/otro.
+- `servicio` = `'ReciboPagos'`. Nunca `'MercadoPago'` ni `'QR-RECOVER'`: esos
+  valores marcan el pago como QR/Web.
+- `placas_tot_monto` = estacionamiento **sin** propina
+  (`paid_amount - gratuity`). No hay columna para la propina.
+- `secuencia` ← `transaction_id`, `autorizacion` ← `authorization_code`,
+  `tarjeta` ← `'****' + card_last_digits`.
+- `origen_pago` distinto de `'web'` (cobro presencial).
+- Equipos: `equipos.equipo_marca` es texto libre (máx. 24); "ReciboPagos" se
+  puede cargar hoy desde /equipments.
+- Con el primer pago real de prueba, enviar el `placas_id` a parkingcash_web
+  para verificar los reportes.
 
 ### Fase 5 — Piloto y cierre
 - [ ] Piloto en 1 equipo por app; revisar conciliación contra el panel RP.

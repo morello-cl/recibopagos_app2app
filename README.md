@@ -1,18 +1,27 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="doc/assets/hero-dark.png">
+  <img alt="Cobra con ReciboPagos desde tu app Flutter: la app envía monto y orden_id por Intent, y recibe resultCode -1 con status_paid paid. Solo paid es un pago aprobado." src="doc/assets/hero-light.png">
+</picture>
+
 # recibopagos_app2app
 
-Plugin Flutter (Android) para cobrar con la app **ReciboPagos POS** instalada
-en el mismo equipo, vía Intent (App To App). Sin red de por medio.
+Plugin Flutter para Android que cobra con la app **ReciboPagos POS** instalada
+en el mismo equipo. Tu app le pasa el monto por un Intent, el cliente paga con
+tarjeta en la pantalla de ReciboPagos y el resultado vuelve a tu app como un
+objeto tipado. No hay red de por medio.
 
-**Documentación oficial de la integración:**
-https://recibopagos.com/desarrolladores/app-to-app
+Implementa la [integración App To App de ReciboPagos](https://recibopagos.com/desarrolladores/app-to-app).
 
-## Requisitos
+<sub>Paquete mantenido por Mufin. No es un producto oficial de ReciboPagos;
+el nombre, el logo y las imágenes del equipo pertenecen a ReciboPagos.</sub>
 
-- Android, con la app `com.recibopagos.pos` instalada.
-- El equipo en **modo intent**, activado desde el panel de ReciboPagos. Si no
-  lo está, la app rechaza el cobro y devuelve cancelado (`resultCode -5`).
-- No hay que tocar el manifest de la app: el plugin declara el `<queries>`
-  necesario para Android 11+.
+## Antes de empezar
+
+- La app `com.recibopagos.pos` instalada en el equipo.
+- El equipo en **modo intent**. Se activa desde el panel de ReciboPagos. Sin
+  él, la app rechaza el cobro y responde como cancelado.
+- Nada que agregar al `AndroidManifest.xml` de tu app: el plugin ya declara la
+  visibilidad del package que exige Android 11+.
 
 ## Instalación
 
@@ -24,90 +33,141 @@ dependencies:
       ref: v0.1.0
 ```
 
-## Uso
+## Cobrar
 
 ```dart
 import 'package:recibopagos_app2app/recibopagos_app2app.dart';
 
-final rp = RecibopagosClient(channel: 'DTEx'); // mode: production por defecto
+final rp = RecibopagosClient(channel: 'DTEx');
 
 if (!await rp.isInstalled()) {
-  // ofrecer otro medio de pago
+  // Ofrece otro medio de pago.
 }
 
 try {
-  final r = await rp.charge(const RecibopagosChargeRequest(
-    amount: 12500,          // pesos enteros, > 0
-    orderId: 'VENTA-12345', // siempre: llave de conciliación
-    // paymentType: RecibopagosPaymentType.debit,
-    // exempt: true,        // venta exenta de IVA
-    // skipKeypad: true,    // por defecto: directo al cobro
+  final pago = await rp.charge(const RecibopagosChargeRequest(
+    amount: 20000,          // pesos enteros, mayor a 0
+    orderId: 'VENTA-12345', // envíalo siempre: con él concilias
   ));
-  // Aprobado. r.paidAmount incluye propina (r.gratuity).
-  // Solo ahora se emite la boleta.
-} on RecibopagosCancelledException {
-  // Cancelado o equipo sin modo intent (ReciboPagos no distingue ambos).
-} on RecibopagosTimeoutException {
-  // Caducó (el cobro expira a los 5 minutos).
-} on RecibopagosRejectedException {
-  // Rechazado por el emisor.
-} on RecibopagosFailedException {
-  // Falla en la app ReciboPagos.
-} on RecibopagosNotInstalledException {
-  // App no instalada.
-} on RecibopagosUnknownException {
-  // Estado incierto: NO asumir que no se cobró. Conciliar (ver abajo).
+
+  final venta = pago.paidAmount - pago.gratuity; // paidAmount incluye propina
+  // Recién aquí emites la boleta.
+} on RecibopagosException catch (e) {
+  // Ver la tabla de abajo.
 }
 ```
 
-`charge()` retorna **solo** si `status_paid == "paid"`. Un `RESULT_OK` de
-Android no significa que se pagó.
+> [!WARNING]
+> **`RESULT_OK` no significa que se pagó.** Solo indica que el flujo terminó.
+> El veredicto está en `status_paid`, y solo `paid` es un pago aprobado.
+> `charge()` ya hace esa verificación: si retorna, se cobró. En cualquier otro
+> caso lanza una excepción.
 
-### Conciliación
+### Cómo viaja un cobro
 
-Si nuestra app muere mientras se cobra, el resultado se pierde. Al volver,
-con una venta pendiente:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as Tu app Flutter
+    participant RP as App ReciboPagos
+    participant C as Cliente
+    App->>RP: Intent com.recibopagos.pos.sibus-payment<br/>monto, orden_id, exit_wallet
+    RP->>C: Muestra el monto
+    C->>RP: Paga con tarjeta
+    RP-->>App: resultCode -1 + status_paid "paid"<br/>order_id, paid_amount, authorization_code…
+    App->>App: Verifica status_paid y order_id
+```
+
+### Opciones del cobro
+
+| Parámetro       | Qué hace                                                        | Por defecto |
+|-----------------|-----------------------------------------------------------------|-------------|
+| `amount`        | Monto en pesos enteros. Obligatorio y mayor a 0.                | —           |
+| `orderId`       | Tu id de orden. Vuelve en la respuesta y se verifica.           | —           |
+| `paymentType`   | Sugiere crédito o débito al cajero.                             | lo elige el cajero |
+| `exempt`        | Marca la venta como exenta de IVA.                              | `false`     |
+| `skipKeypad`    | Salta la calculadora y va directo al pago.                      | `true`      |
+| `transactionId` | Id de transacción de tu sistema.                                | —           |
+
+### Qué devuelve un pago aprobado
+
+`orderId`, `transactionId`, `authorizationCode`, `cardLastDigits`,
+`paymentMethod` (`CREDITO` o `DEBITO`), `installments` (0 = contado),
+`gratuity` (propina), `paidAmount` (total con propina) y `terminalSerial`.
+Los extras originales quedan en `raw` para logs y soporte.
+
+## Cuando no se cobra
+
+Cada desenlace tiene su propia excepción. Todas heredan de
+`RecibopagosException`.
+
+| Excepción                          | Cuándo ocurre                                      | Qué hacer |
+|------------------------------------|----------------------------------------------------|-----------|
+| `RecibopagosCancelledException`    | El cajero canceló, o el equipo no está en modo intent | Volver a la venta. Si se repite, revisar el modo intent en el panel. |
+| `RecibopagosRejectedException`     | El emisor rechazó la tarjeta                       | Pedir otra tarjeta u otro medio de pago. |
+| `RecibopagosTimeoutException`      | El cobro caducó (expira a los 5 minutos)           | Lanzar un cobro nuevo. |
+| `RecibopagosFailedException`       | La app ReciboPagos falló                           | Reintentar; si persiste, soporte de ReciboPagos. |
+| `RecibopagosNotInstalledException` | La app no está en el equipo                        | Ofrecer otro medio de pago. |
+| `RecibopagosUnknownException`      | Estado incierto o `order_id` que no coincide       | **No asumir que no se cobró.** Conciliar antes de reintentar. |
+
+## Conciliar un cobro interrumpido
+
+Si Android cierra tu app mientras el cliente paga, el resultado no llega.
+ReciboPagos guarda el último cobro y lo expone para consulta:
 
 ```dart
-final last = await rp.lastCharge();
-if (last != null && last.orderId == pendiente.orderId && last.isPaid) {
-  // el cobro se hizo: cerrar la venta sin volver a cobrar
+final ultimo = await rp.lastCharge();
+
+if (ultimo != null && ultimo.orderId == pendiente.orderId && ultimo.isPaid) {
+  // Se cobró: cierra la venta sin volver a cobrar.
 }
 ```
 
-`lastCharge()` lee el ContentProvider de solo lectura
-`content://com.recibopagos.pos.provider/prefs`.
+Llámalo al volver a primer plano si tienes una venta pendiente.
 
-### Modos
+## Probar sin terminal
+
+```dart
+final rp = RecibopagosClient(
+  mode: RecibopagosMode.mock,
+  mockOutcome: RecibopagosMockOutcome.rejected,
+);
+```
 
 | Modo         | Qué hace |
 |--------------|----------|
-| `production` | Cobra contra la app real. |
-| `debug`      | Igual, y loggea extras enviados y recibidos (`dart:developer`). |
-| `mock`       | No toca Android. Simula `mockOutcome` (`approved`, `cancelled`, `timeout`, `rejected`, `failed`, `notInIntentMode`) tras `mockDelay`. |
+| `production` | Cobra con la app real. |
+| `debug`      | Cobra con la app real y registra lo enviado y lo recibido. |
+| `mock`       | No abre nada. Responde según `mockOutcome`: `approved`, `cancelled`, `timeout`, `rejected`, `failed` o `notInIntentMode`. |
 
-## Mapeo con la doc
+<details>
+<summary>Correspondencia con los extras del Intent</summary>
 
-| Request            | Extra            | Tipo    |
+| Plugin             | Extra            | Tipo    |
 |--------------------|------------------|---------|
 | `amount`           | `monto`          | int     |
 | `orderId`          | `orden_id`       | String  |
 | `transactionId`    | `id_transaction` | String  |
-| `paymentType`      | `tipo`           | `credito` / `debito` |
-| `exempt`           | `exempt`         | int 0/1 |
+| `paymentType`      | `tipo`           | `credito` o `debito` |
+| `exempt`           | `exempt`         | int, 0 o 1 |
 | `skipKeypad`       | `exit_wallet`    | boolean |
 | `channel` (cliente)| `channel`        | String  |
 
 Respuesta: `order_id`, `status_paid`, `transaction_id`, `authorization_code`,
 `card_last_digits`, `payment_method`, `installments`, `gratuity`,
-`paid_amount`, `terminal_serial`. Los numéricos se leen tolerantes (int o
-String) y los strings ausentes llegan como `''`. Los extras crudos quedan en
-`raw` para soporte.
+`paid_amount`, `terminal_serial`. Los numéricos se aceptan como int o como
+String, y un texto ausente llega vacío.
 
-## Pruebas
+Respaldo: `content://com.recibopagos.pos.provider/prefs`.
 
-```
+</details>
+
+## Desarrollo
+
+```sh
 flutter test
 ```
 
-Plan de trabajo y preguntas abiertas: [PLANNING.md](PLANNING.md).
+La imagen de portada se genera desde `doc/hero/hero.html` con
+`doc/hero/render.sh`. El plan de trabajo y las preguntas abiertas con
+ReciboPagos están en [PLANNING.md](PLANNING.md).
