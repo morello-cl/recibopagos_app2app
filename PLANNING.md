@@ -171,9 +171,11 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
 - [ ] Equipo **sin** modo intent → `-5`.
 - [ ] Matar nuestra app durante el cobro → al reabrir, `lastCharge()` concilia.
 - [ ] Venta exenta (`exempt: 1`).
-- [ ] Anotar el largo real de `transaction_id` (la doc no lo indica). Pasado
-      24 caracteres se corta en `dte_payment.secuencia`; pasado 32, el INSERT
-      en `pago_con_tarjeta` falla (PostgreSQL `22001`) y el pago no se registra.
+- [ ] Anotar sobre `transaction_id`: formato (¿uuid, numérico, alfanumérico?),
+      si es estable y único por transacción (de eso depende que sirva para
+      reversar) y si es distinto de `authorization_code`. En ParkingCash el
+      largo sí importa: pasado 32, el INSERT en `pago_con_tarjeta` falla
+      (PostgreSQL `22001`) y el pago no se registra.
 - [ ] Ajustar el parseo con los tipos reales y publicar `v0.1.1` si cambia.
 
 ### Fase 3 — Integración DTEx (1 día)
@@ -197,10 +199,12 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
   ReciboPagos lo define Marco.
 - `payment_method` `CREDITO`/`DEBITO` ya se normaliza bien en
   `tarifa-resolver.js`; no hay que tocar nada.
-- **No enviar `transaction_id` por `card_sequence`:** `dte_payment.secuencia`
-  es varchar(24) y trunca en silencio (bug v7.55.0 con Kushki). Si el
-  `transaction_id` de RP supera 24 caracteres, usar `POST /api/dtes/v6`
-  (`transaction_reference` char(36), `ticket_adquirente` varchar(24)).
+- **`transaction_id` va siempre por `POST /api/dtes/v6`**
+  (`transaction_reference` char(36)), **nunca por `card_sequence`**, mida lo
+  que mida. `secuencia` ya mezcla dos significados (Haulmer `sequenceNumber`,
+  uuid de Kushki), y un largo medido un día no es un contrato: varchar(24)
+  trunca sin error ni log (bug v7.55.0). Regla vigente: lo que no cabe se
+  descarta entero y queda completo en el log, nunca se trunca.
 - `paid_amount` incluye la propina: no usarlo como base de comisión.
 - Alta de equipos: `controllers/customers.js` fija el prefijo `NEWPOS:8210:` en
   `serial_tid` y dos triggers recalculan `sn`. Un terminal RP dado de alta por
