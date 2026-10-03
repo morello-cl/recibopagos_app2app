@@ -223,14 +223,20 @@ Para que el backoffice lo reporte sin cambios:
 - `tarjeta_tipo`: mapear `CREDITO` → `'Tarjeta de Crédito'` y `DEBITO` →
   `'Tarjeta de Débito'` (literales exactos). Si llega `CREDITO` tal cual, el
   pago se cuenta como efectivo/otro.
-- `servicio` = `'recibopagos'` (minúscula, definido por Marco). Nunca
+- `servicio` = `'recibopagos'` (minúscula, definido por Marco). **Por
+  confirmar:** la decisión fue sobre `dte_payment.servicio` (MySQL). En esta
+  tabla todos los valores llevan mayúsculas (`Haulmer`, `MercadoPago`,
+  `VirtualPOS`, `Compraqui`). Nunca
   `'MercadoPago'` ni `'QR-RECOVER'`: esos valores marcan el pago como QR/Web.
   Confirmado: el backoffice no requiere cambios (solo `routes/qr-web.js`
   compara `servicio`, contra `MercadoPago`/`QR-RECOVER`).
-- **`abono_al_comercio_id` queda NULL** en las filas de ReciboPagos. El proceso
-  que crea los abonos (fuera de parkingcash_web; ¿Tomahawk/services?) debe
-  **excluir `servicio = 'recibopagos'`**, o esos pagos entrarían como dinero
-  que MUFIN debe liquidar.
+- **`abono_al_comercio_id` debe quedar NULL** en las filas de ReciboPagos.
+  Según Tomahawk (consulta a p5inapp, 2026-10-03), el abono hoy es *opt-in*:
+  solo `MercadoPago` y `QR-RECOVER` tienen abonos; Haulmer (3,17 M filas),
+  Redelcom y VirtualPOS quedan en NULL. El proceso no vive en Tomahawk ni en
+  parkingcash_web. **Pendiente:** confirmar con el dueño del proceso que
+  selecciona por lista blanca; si es así, no hay que cambiar nada (agregar una
+  exclusión sería código muerto y engañoso).
 - `placas_tot_monto` = estacionamiento **sin** propina
   (`paid_amount - gratuity`). No hay columna para la propina.
 - `secuencia` ← `transaction_id`, `autorizacion` ← `authorization_code`,
