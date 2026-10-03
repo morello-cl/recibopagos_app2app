@@ -171,8 +171,9 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
 - [ ] Equipo **sin** modo intent → `-5`.
 - [ ] Matar nuestra app durante el cobro → al reabrir, `lastCharge()` concilia.
 - [ ] Venta exenta (`exempt: 1`).
-- [ ] Anotar el largo real de `transaction_id`. Si pasa de 24 caracteres,
-      trunca en `dte_payment.secuencia` (y quizá en `pago_con_tarjeta.secuencia`).
+- [ ] Anotar el largo real de `transaction_id` (la doc no lo indica). Pasado
+      24 caracteres se corta en `dte_payment.secuencia`; pasado 32, el INSERT
+      en `pago_con_tarjeta` falla (PostgreSQL `22001`) y el pago no se registra.
 - [ ] Ajustar el parseo con los tipos reales y publicar `v0.1.1` si cambia.
 
 ### Fase 3 — Integración DTEx (1 día)
@@ -227,6 +228,13 @@ Para que el backoffice lo reporte sin cambios:
 - `secuencia` ← `transaction_id`, `autorizacion` ← `authorization_code`,
   `tarjeta` ← `'****' + card_last_digits`.
 - `origen_pago` distinto de `'web'` (cobro presencial).
+- Largos (producción p5inapp): `servicio` varchar(**12**) ('ReciboPagos' = 11,
+  ninguna variante más larga cabe), `autorizacion` varchar(32), `tarjeta_tipo`
+  varchar(64), `tarjeta` varchar(24), `secuencia` varchar(32).
+- Todas NOT NULL salvo `abono_al_comercio_id`: enviar `''`, nunca null (el
+  plugin ya entrega `''` para strings ausentes).
+- PostgreSQL no trunca: un valor más largo falla con `22001` y aborta el INSERT
+  completo, así que el pago no se registra.
 - Equipos: `equipos.equipo_marca` es texto libre (máx. 24); "ReciboPagos" se
   puede cargar hoy desde /equipments.
 - Con el primer pago real de prueba, enviar el `placas_id` a parkingcash_web
