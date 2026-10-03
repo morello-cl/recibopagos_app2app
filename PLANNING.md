@@ -183,7 +183,9 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
 - [ ] `RecibopagosPayService` análogo a `KushkiPayService` (sin credenciales:
       solo `channel` y modo).
 - [ ] `step2_page.dart`: agregar RP al auto-routing actual
-      (Kushki / Haulmer) con detección por `isInstalled()`. Definir prioridad.
+      (Kushki / Haulmer) con detección por `isInstalled()`. No hay prioridad
+      que definir: cada equipo pertenece a un solo proveedor (definido por
+      Marco), así que se cobra con el que esté instalado.
 - [ ] Usar `paid_amount` (incluye propina) y `exempt` coherente con el tipo de DTE.
 - [ ] Conciliación al volver a primer plano con venta pendiente → `lastCharge()`.
 - [ ] Página de pruebas en `lib/src/pages/dev/` (como `kushki_test_page`).
@@ -230,13 +232,9 @@ Para que el backoffice lo reporte sin cambios:
   `'MercadoPago'` ni `'QR-RECOVER'`: esos valores marcan el pago como QR/Web.
   Confirmado: el backoffice no requiere cambios (solo `routes/qr-web.js`
   compara `servicio`, contra `MercadoPago`/`QR-RECOVER`).
-- **`abono_al_comercio_id` debe quedar NULL** en las filas de ReciboPagos.
-  Según Tomahawk (consulta a p5inapp, 2026-10-03), el abono hoy es *opt-in*:
-  solo `MercadoPago` y `QR-RECOVER` tienen abonos; Haulmer (3,17 M filas),
-  Redelcom y VirtualPOS quedan en NULL. El proceso no vive en Tomahawk ni en
-  parkingcash_web. **Pendiente:** confirmar con el dueño del proceso que
-  selecciona por lista blanca; si es así, no hay que cambiar nada (agregar una
-  exclusión sería código muerto y engañoso).
+- **`abono_al_comercio_id` queda NULL**: ReciboPagos abona directo al
+  comercio, igual que Haulmer (definido por Marco). El abono hoy es *opt-in*
+  (solo `MercadoPago` y `QR-RECOVER`), así que no hay que cambiar nada.
 - `placas_tot_monto` = estacionamiento **sin** propina
   (`paid_amount - gratuity`). No hay columna para la propina.
 - `secuencia` ← `transaction_id`, `autorizacion` ← `authorization_code`,
