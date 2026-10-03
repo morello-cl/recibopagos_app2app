@@ -189,14 +189,12 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
 - [ ] Página de pruebas en `lib/src/pages/dev/` (como `kushki_test_page`).
 
 **Backend (Tomahawk), informado por su sesión el 2026-10-03:**
-- `proveedores_pago` (hoy `kushki` liquida_mufin=1, `tuu` liquida_mufin=0):
-  **Marco debe definir `liquida_mufin`** para ReciboPagos antes de agregar la
-  fila `recibopagos`. Un valor equivocado hace que los jobs de pago y ajuste la
-  tomen o la ignoren en silencio. Si no liquida por MUFIN, no necesita
-  `tarifas_comision`.
-- `dte_payment.servicio` es varchar(24) libre, con mayúsculas mezcladas
-  (`Haulmer`, `SUMUP`, `Kushki`, `RedPay`). El valor a escribir para
-  ReciboPagos lo define Marco.
+- `proveedores_pago`: fila `recibopagos` con **`liquida_mufin=0`**
+  (definido por Marco el 2026-10-03: ReciboPagos deposita directo al comercio).
+  No necesita `tarifas_comision`.
+- `dte_payment.servicio` = **`recibopagos`** (definido por Marco: llaves en
+  minúscula). Los valores históricos (`Haulmer`, `SUMUP`, `Kushki`, `RedPay`)
+  no se tocan.
 - `payment_method` `CREDITO`/`DEBITO` ya se normaliza bien en
   `tarifa-resolver.js`; no hay que tocar nada.
 - **`transaction_id` va siempre por `POST /api/dtes/v6`**
@@ -211,8 +209,8 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
   ahí queda con la marca equivocada (ya pasa con 1.862 equipos).
 - No usar `payment_processor_accounts` (modelo Compraquí): App To App no tiene
   alianza ni webhook.
-- **Cuotas:** el cálculo de comisión no modela `installments > 1`. Si RP
-  permite cuotas y liquida por MUFIN, resolverlo antes.
+- **Cuotas:** solo informativas (definido por Marco). Como MUFIN no liquida
+  ReciboPagos, `installments` no entra al cálculo de comisión.
 
 ### Fase 4 — Integración ParkingCash (sesión remota, 1 día)
 - [ ] Dependencia `git: {url: ..., ref: v0.1.x}` (patrón de `nexgo_smartpos`).
@@ -225,14 +223,16 @@ Para que el backoffice lo reporte sin cambios:
 - `tarjeta_tipo`: mapear `CREDITO` → `'Tarjeta de Crédito'` y `DEBITO` →
   `'Tarjeta de Débito'` (literales exactos). Si llega `CREDITO` tal cual, el
   pago se cuenta como efectivo/otro.
-- `servicio` = `'ReciboPagos'`. Nunca `'MercadoPago'` ni `'QR-RECOVER'`: esos
-  valores marcan el pago como QR/Web.
+- `servicio` = `'recibopagos'` (minúscula, definido por Marco). Nunca
+  `'MercadoPago'` ni `'QR-RECOVER'`: esos valores marcan el pago como QR/Web.
+  Pendiente que parkingcash_web confirme que el backoffice no compara
+  `servicio` sensible a mayúsculas.
 - `placas_tot_monto` = estacionamiento **sin** propina
   (`paid_amount - gratuity`). No hay columna para la propina.
 - `secuencia` ← `transaction_id`, `autorizacion` ← `authorization_code`,
   `tarjeta` ← `'****' + card_last_digits`.
 - `origen_pago` distinto de `'web'` (cobro presencial).
-- Largos (producción p5inapp): `servicio` varchar(**12**) ('ReciboPagos' = 11,
+- Largos (producción p5inapp): `servicio` varchar(**12**) ('recibopagos' = 11,
   ninguna variante más larga cabe), `autorizacion` varchar(32), `tarjeta_tipo`
   varchar(64), `tarjeta` varchar(24), `secuencia` varchar(32).
 - Todas NOT NULL salvo `abono_al_comercio_id`: enviar `''`, nunca null (el
