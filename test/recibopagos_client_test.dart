@@ -6,7 +6,11 @@ Map<Object?, Object?> res(int code, Map<String, Object?>? extras) =>
     <Object?, Object?>{'resultCode': code, 'extras': extras};
 
 RecibopagosChargeResponse parse(Map<Object?, Object?>? r) =>
-    RecibopagosClient.parseResult(r, sentOrderId: 'V-1');
+    RecibopagosClient.parseResult(
+      r,
+      sentOrderId: 'V-1',
+      sentAmount: 12500,
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +34,17 @@ void main() {
     });
     expect(
       () => const RecibopagosChargeRequest(amount: 0, orderId: 'x').toExtras(),
+      throwsArgumentError,
+    );
+    expect(
+      () => const RecibopagosChargeRequest(amount: 1, orderId: ' ').toExtras(),
+      throwsArgumentError,
+    );
+    expect(
+      () => const RecibopagosChargeRequest(
+        amount: 0x80000000,
+        orderId: 'V-1',
+      ).toExtras(),
       throwsArgumentError,
     );
   });
@@ -78,18 +93,49 @@ void main() {
         throwsA(isA<RecibopagosCancelledException>()));
   });
 
-  test('paid con order_id ajeno → desconocido; vacío se acepta', () {
+  test('paid exige RESULT_OK y el mismo order_id', () {
     expect(
-      () => parse(res(-1, <String, Object?>{
+      () => parse(res(-5, <String, Object?>{
         'status_paid': 'paid',
-        'order_id': 'OTRA',
+        'order_id': 'V-1',
+        'paid_amount': 12500,
       })),
       throwsA(isA<RecibopagosUnknownException>()),
     );
     expect(
-      parse(res(-1, <String, Object?>{'status_paid': 'paid', 'order_id': ''}))
-          .orderId,
-      '',
+      () => parse(res(-1, <String, Object?>{
+        'status_paid': 'paid',
+        'order_id': 'OTRA',
+        'paid_amount': 12500,
+      })),
+      throwsA(isA<RecibopagosUnknownException>()),
+    );
+    expect(
+      () => parse(res(-1, <String, Object?>{
+        'status_paid': 'paid',
+        'order_id': '',
+        'paid_amount': 12500,
+      })),
+      throwsA(isA<RecibopagosUnknownException>()),
+    );
+  });
+
+  test('paid exige monto válido y consistente con monto + propina', () {
+    expect(
+      () => parse(res(-1, <String, Object?>{
+        'status_paid': 'paid',
+        'order_id': 'V-1',
+      })),
+      throwsA(isA<RecibopagosUnknownException>()),
+    );
+    expect(
+      () => parse(res(-1, <String, Object?>{
+        'status_paid': 'paid',
+        'order_id': 'V-1',
+        'paid_amount': 13001,
+        'gratuity': 500,
+      })),
+      throwsA(isA<RecibopagosUnknownException>()),
     );
   });
 

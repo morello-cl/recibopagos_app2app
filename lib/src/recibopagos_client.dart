@@ -113,7 +113,11 @@ class RecibopagosClient {
       }
     }
     _log('charge ← $result');
-    return parseResult(result, sentOrderId: request.orderId);
+    return parseResult(
+      result,
+      sentOrderId: request.orderId,
+      sentAmount: request.amount,
+    );
   }
 
   /// Último cobro según el ContentProvider de ReciboPagos, o `null` si no hay
@@ -143,6 +147,7 @@ class RecibopagosClient {
   static RecibopagosChargeResponse parseResult(
     Map<Object?, Object?>? result, {
     required String sentOrderId,
+    int? sentAmount,
   }) {
     final int? resultCode = result?['resultCode'] as int?;
     final Object? rawExtras = result?['extras'];
@@ -153,12 +158,32 @@ class RecibopagosClient {
 
     switch (status) {
       case 'paid':
-        // RESULT_OK no implica pago; `paid` sí, aunque el resultCode sea raro.
+        if (resultCode != _resultOk) {
+          throw RecibopagosUnknownException(
+            'Respuesta inconsistente: status_paid "paid" con resultCode $resultCode',
+            statusPaid: status,
+            resultCode: resultCode,
+            raw: extras,
+          );
+        }
         final RecibopagosChargeResponse r =
             RecibopagosChargeResponse.fromExtras(extras);
-        if (r.orderId.isNotEmpty && r.orderId != sentOrderId) {
+        if (r.orderId != sentOrderId) {
           throw RecibopagosUnknownException(
             'order_id "${r.orderId}" no coincide con "$sentOrderId"',
+            statusPaid: status,
+            resultCode: resultCode,
+            raw: extras,
+          );
+        }
+        final int baseAmount = r.paidAmount - r.gratuity;
+        if (r.paidAmount <= 0 ||
+            r.gratuity < 0 ||
+            baseAmount < 0 ||
+            (sentAmount != null && baseAmount != sentAmount)) {
+          throw RecibopagosUnknownException(
+            'Monto aprobado inconsistente: paid_amount ${r.paidAmount}, '
+            'gratuity ${r.gratuity}, enviado ${sentAmount ?? "desconocido"}',
             statusPaid: status,
             resultCode: resultCode,
             raw: extras,

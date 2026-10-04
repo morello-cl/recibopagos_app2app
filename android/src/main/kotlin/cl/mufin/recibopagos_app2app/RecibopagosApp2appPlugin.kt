@@ -30,7 +30,8 @@ import io.flutter.plugin.common.PluginRegistry
  *  - `lastCharge(): List<Map>?` — filas del ContentProvider de respaldo.
  *
  * Errores: `MFN-03` sin actividad, `MFN-04` no instalada, `MFN-05` otro cobro
- * en curso, `MFN-06` falla al lanzar, `MFN-07` falla al leer el provider.
+ * en curso, `MFN-06` falla al lanzar, `MFN-07` falla al leer el provider y
+ * `MFN-08` un entero no cabe en el tipo Int requerido por ReciboPagos.
  */
 class RecibopagosApp2appPlugin :
     FlutterPlugin,
@@ -103,7 +104,12 @@ class RecibopagosApp2appPlugin :
         for ((k, v) in extras) {
             when (v) {
                 is Int -> intent.putExtra(k, v)
-                is Long -> intent.putExtra(k, v.toInt())
+                is Long -> {
+                    if (v !in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) {
+                        return result.error("MFN-08", "Extra '$k' is outside Android Int range", null)
+                    }
+                    intent.putExtra(k, v.toInt())
+                }
                 is Boolean -> intent.putExtra(k, v)
                 is String -> intent.putExtra(k, v)
                 null -> {}

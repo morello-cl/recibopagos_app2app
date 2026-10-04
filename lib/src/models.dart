@@ -45,6 +45,12 @@ class RecibopagosChargeRequest {
     if (amount <= 0) {
       throw ArgumentError.value(amount, 'amount', 'debe ser mayor a 0');
     }
+    if (amount > 0x7fffffff) {
+      throw ArgumentError.value(amount, 'amount', 'excede el máximo de Android Int');
+    }
+    if (orderId.trim().isEmpty) {
+      throw ArgumentError.value(orderId, 'orderId', 'no puede estar vacío');
+    }
     return <String, Object?>{
       'monto': amount,
       'orden_id': orderId,

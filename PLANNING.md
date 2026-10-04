@@ -179,6 +179,10 @@ Matriz mínima (cada caso registra el `Bundle` crudo para responder la sección 
 - [ ] Ajustar el parseo con los tipos reales y publicar `v0.1.1` si cambia.
 
 ### Fase 3 — Integración DTEx (1 día)
+
+**En espera** (decisión de Marco, 2026-10-04). La sesión dtex_app tiene el
+resumen de integración y no ha tocado el repo.
+
 - [ ] Dependencia por git + tag (o `path` mientras se desarrolla).
 - [ ] `RecibopagosPayService` análogo a `KushkiPayService` (sin credenciales:
       solo `channel` y modo).

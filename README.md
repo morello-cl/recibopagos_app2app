@@ -59,9 +59,9 @@ try {
 
 > [!WARNING]
 > **`RESULT_OK` no significa que se pagó.** Solo indica que el flujo terminó.
-> El veredicto está en `status_paid`, y solo `paid` es un pago aprobado.
-> `charge()` ya hace esa verificación: si retorna, se cobró. En cualquier otro
-> caso lanza una excepción.
+> El veredicto está en `status_paid`: un pago se aprueba solo con
+> `RESULT_OK` **y** `status_paid == "paid"`. `charge()` también verifica la orden
+> y el monto; si retorna, se cobró. En cualquier otro caso lanza una excepción.
 
 ### Cómo viaja un cobro
 
