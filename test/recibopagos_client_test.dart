@@ -6,11 +6,7 @@ Map<Object?, Object?> res(int code, Map<String, Object?>? extras) =>
     <Object?, Object?>{'resultCode': code, 'extras': extras};
 
 RecibopagosChargeResponse parse(Map<Object?, Object?>? r) =>
-    RecibopagosClient.parseResult(
-      r,
-      sentOrderId: 'V-1',
-      sentAmount: 12500,
-    );
+    RecibopagosClient.parseResult(r, sentAmount: 12500);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -93,7 +89,7 @@ void main() {
         throwsA(isA<RecibopagosCancelledException>()));
   });
 
-  test('paid exige RESULT_OK y el mismo order_id', () {
+  test('paid exige RESULT_OK', () {
     expect(
       () => parse(res(-5, <String, Object?>{
         'status_paid': 'paid',
@@ -102,22 +98,42 @@ void main() {
       })),
       throwsA(isA<RecibopagosUnknownException>()),
     );
-    expect(
-      () => parse(res(-1, <String, Object?>{
+  });
+
+  test('respuesta real del Sunmi: order_id propio de RP y CREDIT', () {
+    // Capturada por ReciboPagos el 2026-10-08 con el APK demo de ParkingCash.
+    final RecibopagosChargeResponse r = RecibopagosClient.parseResult(
+      res(-1, <String, Object?>{
+        'status': 'paid',
+        'estado': -1,
+        'payment_method': 'CREDIT',
+        'terminal_serial': 'P3G8261KJ0595',
         'status_paid': 'paid',
-        'order_id': 'OTRA',
-        'paid_amount': 12500,
-      })),
-      throwsA(isA<RecibopagosUnknownException>()),
+        'gratuity': 0,
+        'transaction_id': '13059918803',
+        'card_last_digits': '8597',
+        'unique_identifier': '13059918803',
+        'order_id': '01a11cea-bc2f-72c4-b1e3-8e2793842317',
+        'authorization_code': '816434',
+        'paid_amount': 560,
+        'installments': 0,
+      }),
+      sentAmount: 560,
     );
-    expect(
-      () => parse(res(-1, <String, Object?>{
-        'status_paid': 'paid',
-        'order_id': '',
-        'paid_amount': 12500,
-      })),
-      throwsA(isA<RecibopagosUnknownException>()),
-    );
+    expect(r.orderId, '01a11cea-bc2f-72c4-b1e3-8e2793842317');
+    expect(r.paymentType, RecibopagosPaymentType.credit);
+    expect(r.transactionId, '13059918803');
+    expect(r.paidAmount, 560);
+  });
+
+  test('paymentType normaliza CREDIT/CREDITO/DEBIT/DEBITO', () {
+    RecibopagosPaymentType? t(String m) => RecibopagosChargeResponse.fromExtras(
+            <String, Object?>{'payment_method': m}).paymentType;
+    expect(t('CREDIT'), RecibopagosPaymentType.credit);
+    expect(t('CREDITO'), RecibopagosPaymentType.credit);
+    expect(t('debit'), RecibopagosPaymentType.debit);
+    expect(t('DEBITO'), RecibopagosPaymentType.debit);
+    expect(t(''), isNull);
   });
 
   test('paid exige monto válido y consistente con monto + propina', () {

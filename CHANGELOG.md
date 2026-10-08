@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2 — 2026-10-08
+
+- Ya no exige que `order_id` devuelto coincida con el enviado: en un Sunmi real
+  ReciboPagos responde con un uuid v7 propio, y el chequeo rechazaba pagos
+  aprobados como `RecibopagosUnknownException`.
+- `RecibopagosChargeResponse.paymentType` normaliza `payment_method`
+  (`CREDIT`/`CREDITO`/`DEBIT`/`DEBITO`). El equipo real envía `CREDIT`.
+- El mock devuelve `CREDIT`/`DEBIT` como el equipo real.
+
 ## 0.1.1 — 2026-10-08
 
 - Exige `RESULT_OK`, `status_paid == "paid"`, `order_id` coincidente y monto

@@ -30,7 +30,7 @@ dependencies:
   recibopagos_app2app:
     git:
       url: https://github.com/morello-cl/recibopagos_app2app.git
-      ref: v0.1.1
+      ref: v0.1.2
 ```
 
 ## Cobrar
@@ -52,6 +52,7 @@ try {
 
   final venta = pago.paidAmount - pago.gratuity; // paidAmount incluye propina
   // Recién aquí emites la boleta.
+  // pago.orderId es un id de ReciboPagos (uuid v7), no tu orderId.
 } on RecibopagosException catch (e) {
   // Ver la tabla de abajo.
 }
@@ -60,8 +61,8 @@ try {
 > [!WARNING]
 > **`RESULT_OK` no significa que se pagó.** Solo indica que el flujo terminó.
 > El veredicto está en `status_paid`: un pago se aprueba solo con
-> `RESULT_OK` **y** `status_paid == "paid"`. `charge()` también verifica la orden
-> y el monto; si retorna, se cobró. En cualquier otro caso lanza una excepción.
+> `RESULT_OK` **y** `status_paid == "paid"`. `charge()` también verifica el
+> monto; si retorna, se cobró. En cualquier otro caso lanza una excepción.
 
 ### Cómo viaja un cobro
 
@@ -75,7 +76,7 @@ sequenceDiagram
     RP->>C: Muestra el monto
     C->>RP: Paga con tarjeta
     RP-->>App: resultCode -1 + status_paid "paid"<br/>order_id, paid_amount, authorization_code…
-    App->>App: Verifica status_paid y order_id
+    App->>App: Verifica status_paid y monto
 ```
 
 ### Opciones del cobro
@@ -83,7 +84,7 @@ sequenceDiagram
 | Parámetro       | Qué hace                                                        | Por defecto |
 |-----------------|-----------------------------------------------------------------|-------------|
 | `amount`        | Monto en pesos enteros. Obligatorio y mayor a 0.                | —           |
-| `orderId`       | Tu id de orden. Vuelve en la respuesta y se verifica.           | —           |
+| `orderId`       | Tu id de orden. ReciboPagos no lo devuelve (ver abajo).         | —           |
 | `paymentType`   | Sugiere crédito o débito al cajero.                             | lo elige el cajero |
 | `exempt`        | Marca la venta como exenta de IVA.                              | `false`     |
 | `skipKeypad`    | Salta la calculadora y va directo al pago.                      | `true`      |
@@ -92,7 +93,8 @@ sequenceDiagram
 ### Qué devuelve un pago aprobado
 
 `orderId`, `transactionId`, `authorizationCode`, `cardLastDigits`,
-`paymentMethod` (`CREDITO` o `DEBITO`), `installments` (0 = contado),
+`paymentMethod` (crudo: el equipo envía `CREDIT`; usa `paymentType`, que
+normaliza `CREDIT`/`CREDITO`/`DEBIT`/`DEBITO`), `installments` (0 = contado),
 `gratuity` (propina), `paidAmount` (total con propina) y `terminalSerial`.
 Los extras originales quedan en `raw` para logs y soporte.
 
@@ -108,7 +110,7 @@ Cada desenlace tiene su propia excepción. Todas heredan de
 | `RecibopagosTimeoutException`      | El cobro caducó (expira a los 5 minutos)           | Lanzar un cobro nuevo. |
 | `RecibopagosFailedException`       | La app ReciboPagos falló                           | Reintentar; si persiste, soporte de ReciboPagos. |
 | `RecibopagosNotInstalledException` | La app no está en el equipo                        | Ofrecer otro medio de pago. |
-| `RecibopagosUnknownException`      | Estado incierto o `order_id` que no coincide       | **No asumir que no se cobró.** Conciliar antes de reintentar. |
+| `RecibopagosUnknownException`      | Estado incierto o monto que no cuadra              | **No asumir que no se cobró.** Conciliar antes de reintentar. |
 
 ## Conciliar un cobro interrumpido
 
@@ -118,8 +120,11 @@ ReciboPagos guarda el último cobro y lo expone para consulta:
 ```dart
 final ultimo = await rp.lastCharge();
 
-if (ultimo != null && ultimo.orderId == pendiente.orderId && ultimo.isPaid) {
-  // Se cobró: cierra la venta sin volver a cobrar.
+// Ojo: ReciboPagos no hace eco de tu orderId, así que ultimo.orderId no
+// identifica la venta pendiente: isPaid puede ser de un cobro anterior.
+// Confírmalo en el panel de ReciboPagos. Pendiente de validar en terminal.
+if (ultimo != null && ultimo.isPaid) {
+  // Posible cobro: no vuelvas a cobrar sin confirmarlo.
 }
 ```
 

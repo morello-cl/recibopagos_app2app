@@ -15,8 +15,8 @@ class RecibopagosChargeRequest {
   /// abre en modo normal en vez de cobrar.
   final int amount;
 
-  /// Id de orden (extra `orden_id`). Vuelve como `order_id` y es la llave
-  /// para conciliar con [RecibopagosClient.lastCharge]. Enviarlo siempre.
+  /// Id de orden (extra `orden_id`). ReciboPagos no lo devuelve: el
+  /// `order_id` de la respuesta es un id propio de ReciboPagos.
   final String orderId;
 
   /// Id de transacción de nuestro sistema (extra `id_transaction`).
@@ -65,13 +65,23 @@ class RecibopagosChargeRequest {
 
 /// Cobro **aprobado** (`status_paid == "paid"`).
 class RecibopagosChargeResponse {
+  /// Id de orden **de ReciboPagos** (uuid v7), no el `orderId` enviado.
   final String orderId;
   final String transactionId;
   final String authorizationCode;
   final String cardLastDigits;
 
-  /// `CREDITO` o `DEBITO`, tal como lo envía ReciboPagos.
+  /// Tal como lo envía ReciboPagos. La doc dice `CREDITO`/`DEBITO`, pero el
+  /// equipo real envía `CREDIT`. Para decidir, usar [paymentType].
   final String paymentMethod;
+
+  /// [paymentMethod] normalizado; `null` si no se reconoce.
+  RecibopagosPaymentType? get paymentType =>
+      switch (paymentMethod.trim().toUpperCase()) {
+        'CREDIT' || 'CREDITO' || 'CRÉDITO' => RecibopagosPaymentType.credit,
+        'DEBIT' || 'DEBITO' || 'DÉBITO' => RecibopagosPaymentType.debit,
+        _ => null,
+      };
 
   /// Número de cuotas. 0 = contado.
   final int installments;

@@ -121,9 +121,9 @@ try {
 final last = await rp.lastCharge(); // lee el ContentProvider, null si no hay
 ```
 
-`charge()` solo retorna si `status_paid == 'paid'` **y** `order_id` coincide con
-el enviado; si no coincide lanza `RecibopagosUnknownException` (protege contra
-leer un resultado ajeno).
+`charge()` solo retorna si `status_paid == 'paid'` y el monto cuadra. **No** compara
+`order_id`: en el Sunmi (2026-10-08) ReciboPagos devolvió un uuid v7 propio en
+vez del `orden_id` enviado. Eso deja a `lastCharge()` sin llave de conciliación.
 
 **Kotlin (MethodChannel `cl.mufin.recibopagos_app2app`)**
 
@@ -219,14 +219,16 @@ resumen de integración y no ha tocado el repo.
   ReciboPagos, `installments` no entra al cálculo de comisión.
 
 ### Fase 4 — Integración ParkingCash (sesión remota, 1 día)
-- [ ] Dependencia `git: {url: ..., ref: v0.1.1}` (patrón de `nexgo_smartpos`).
+- [ ] Dependencia `git: {url: ..., ref: v0.1.2}` (patrón de `nexgo_smartpos`).
 - [ ] Entregar a la sesión remota: `README.md` + este plan.
-- [ ] Integrar en el flujo de pago de salida; misma conciliación por `order_id`.
+- [ ] Integrar en el flujo de pago de salida. Conciliación por `order_id` no
+      sirve (RP no hace eco); definir llave con ReciboPagos.
 - [ ] Revisar convivencia con `virtualpos_app2app` (selección de adquirente).
 
 **Registro en `pago_con_tarjeta`, informado por parkingcash_web el 2026-10-03.**
 Para que el backoffice lo reporte sin cambios:
-- `tarjeta_tipo`: mapear `CREDITO` → `'Tarjeta de Crédito'` y `DEBITO` →
+- `tarjeta_tipo`: mapear por `paymentType` (el equipo envía `CREDIT`, no
+  `CREDITO`): crédito → `'Tarjeta de Crédito'` y débito →
   `'Tarjeta de Débito'` (literales exactos). Si llega `CREDITO` tal cual, el
   pago se cuenta como efectivo/otro.
 - `servicio` = `'recibopagos'`, en minúscula. Marco lo confirmó también para

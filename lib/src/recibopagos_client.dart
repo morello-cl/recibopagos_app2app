@@ -113,16 +113,15 @@ class RecibopagosClient {
       }
     }
     _log('charge ← $result');
-    return parseResult(
-      result,
-      sentOrderId: request.orderId,
-      sentAmount: request.amount,
-    );
+    return parseResult(result, sentAmount: request.amount);
   }
 
   /// Último cobro según el ContentProvider de ReciboPagos, o `null` si no hay
-  /// datos. Para conciliar cuando nuestra app murió durante el cobro: comparar
-  /// [RecibopagosLastCharge.orderId] con la orden pendiente.
+  /// datos. Para conciliar cuando nuestra app murió durante el cobro.
+  ///
+  /// Ojo: ReciboPagos no hace eco del `orden_id` enviado, así que
+  /// [RecibopagosLastCharge.orderId] no identifica la orden pendiente.
+  /// Falta validar en terminal qué expone el provider.
   Future<RecibopagosLastCharge?> lastCharge() async {
     if (mode == RecibopagosMode.mock) return null;
     final List<Object?>? rows;
@@ -146,7 +145,6 @@ class RecibopagosClient {
   /// Expuesto para tests; las apps usan [charge].
   static RecibopagosChargeResponse parseResult(
     Map<Object?, Object?>? result, {
-    required String sentOrderId,
     int? sentAmount,
   }) {
     final int? resultCode = result?['resultCode'] as int?;
@@ -166,16 +164,11 @@ class RecibopagosClient {
             raw: extras,
           );
         }
+        // No se compara order_id con el enviado: ReciboPagos devuelve un id
+        // propio (uuid v7), no hace eco de `orden_id`. El resultado ya queda
+        // atado a este cobro por startActivityForResult.
         final RecibopagosChargeResponse r =
             RecibopagosChargeResponse.fromExtras(extras);
-        if (r.orderId != sentOrderId) {
-          throw RecibopagosUnknownException(
-            'order_id "${r.orderId}" no coincide con "$sentOrderId"',
-            statusPaid: status,
-            resultCode: resultCode,
-            raw: extras,
-          );
-        }
         final int baseAmount = r.paidAmount - r.gratuity;
         if (r.paidAmount <= 0 ||
             r.gratuity < 0 ||
@@ -240,7 +233,7 @@ class RecibopagosClient {
             'transaction_id': 'MOCK-${DateTime.now().millisecondsSinceEpoch}',
             'authorization_code': '123456',
             'card_last_digits': '4242',
-            'payment_method': extras['tipo'] == 'credito' ? 'CREDITO' : 'DEBITO',
+            'payment_method': extras['tipo'] == 'credito' ? 'CREDIT' : 'DEBIT',
             'installments': 0,
             'gratuity': 0,
             'paid_amount': amount,

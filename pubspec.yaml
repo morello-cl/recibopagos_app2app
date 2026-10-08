@@ -1,6 +1,6 @@
 name: recibopagos_app2app
 description: Cliente Flutter para cobrar con la app ReciboPagos POS en el mismo equipo Android vía Intent (App To App).
-version: 0.1.1
+version: 0.1.2
 homepage: https://github.com/morello-cl/recibopagos_app2app
 repository: https://github.com/morello-cl/recibopagos_app2app
 documentation: https://recibopagos.com/desarrolladores/app-to-app

@@ -54,8 +54,8 @@ class RecibopagosNotInstalledException extends RecibopagosException {
   const RecibopagosNotInstalledException(super.message);
 }
 
-/// Cualquier otro caso: status desconocido, `order_id` que no coincide,
-/// error nativo. **No asumir que no se cobró**: conciliar con
+/// Cualquier otro caso: status desconocido, monto inconsistente, error
+/// nativo. **No asumir que no se cobró**: conciliar con
 /// [RecibopagosClient.lastCharge] o el panel de ReciboPagos.
 class RecibopagosUnknownException extends RecibopagosException {
   /// Código nativo `MFN-xx`, si el error vino del plugin Android.
