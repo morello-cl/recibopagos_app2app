@@ -1,6 +1,6 @@
 # Changelog
 
-## Sin publicar
+## 0.1.1 — 2026-10-08
 
 - Exige `RESULT_OK`, `status_paid == "paid"`, `order_id` coincidente y monto
   consistente antes de aprobar un cobro.

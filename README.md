@@ -30,7 +30,7 @@ dependencies:
   recibopagos_app2app:
     git:
       url: https://github.com/morello-cl/recibopagos_app2app.git
-      ref: v0.1.0
+      ref: v0.1.1
 ```
 
 ## Cobrar

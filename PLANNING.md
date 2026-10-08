@@ -219,7 +219,7 @@ resumen de integración y no ha tocado el repo.
   ReciboPagos, `installments` no entra al cálculo de comisión.
 
 ### Fase 4 — Integración ParkingCash (sesión remota, 1 día)
-- [ ] Dependencia `git: {url: ..., ref: v0.1.x}` (patrón de `nexgo_smartpos`).
+- [ ] Dependencia `git: {url: ..., ref: v0.1.1}` (patrón de `nexgo_smartpos`).
 - [ ] Entregar a la sesión remota: `README.md` + este plan.
 - [ ] Integrar en el flujo de pago de salida; misma conciliación por `order_id`.
 - [ ] Revisar convivencia con `virtualpos_app2app` (selección de adquirente).
